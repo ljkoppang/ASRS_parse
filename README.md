@@ -6,16 +6,16 @@ This project takes the results from the ASRS (Autism Spectrum Rating Scales) in 
 a summary paragraph in docx format to be added to the final report, saving time in the final report creation process.
 
 pip insstall:
-# %pip install pypdf
-# %pip install pdfplumber
-# %pip install pandas
-# %pip install python-docx
+#### %pip install pypdf
+#### %pip install pdfplumber
+#### %pip install pandas
+#### %pip install python-docx
 
-# %pip install pyinflect spacy
-# %python -m spacy download en_core_web_sm
+#### %pip install pyinflect spacy
+#### %python -m spacy download en_core_web_sm
 
-# %pip install pdfminer.six==20221105
-# %pip install pdfplumber==0.9.0
+#### %pip install pdfminer.six==20221105
+#### %pip install pdfplumber==0.9.0
 
 To do List:
 * Format docx tables with Times New Roman size 12 font
