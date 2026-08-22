@@ -23,13 +23,13 @@ from docx.shared import Inches
 nlp = spacy.load('en_core_web_sm')
 
 tables = []
-firstName = 'Jorge'
+firstName = 'Julian'
 
 ######################                          Extract the tables from the pdf                           ###########################
 #####################################################################################################################################
 
 import pdfplumber
-with pdfplumber.open("C:/Users/ljkop/Laura/ASRS/Jorge_Martinez.pdf") as pdf:
+with pdfplumber.open("C:/Users/ljkop/Laura/ASRS/Julian__Gutierrez.pdf") as pdf:
     for page in pdf.pages:
         tables_on_page = page.extract_tables({})
 
@@ -47,21 +47,8 @@ def get_table(idx_tables):
         df_temp = pd.DataFrame(temp_table[1:], columns=temp_table[0])  # first row as header
     return df_temp
 
-##  Extract tables from pdf
+#need to add df_sr and change df_asr to df_a. Will need to merge 2 tables of 'unusual behaviors'
 df_ASRS = get_table(0)
-df_ub = get_table(14)
-df_ub_cont = get_table(2)
-df_sc = get_table(3)
-df_sr = get_table(4)
-df_ub = get_table(5)
-df_ps = get_table(7)
-df_as = get_table(8)
-df_ser = get_table(9)
-df_al = get_table(10)
-df_ss = get_table(11)
-df_s = get_table(12)
-df_a = get_table(13)
-df_br = get_table(14)
 
 
 ######################                   Clean up the ASRS table for appendix table                       ###########################
@@ -122,14 +109,20 @@ for row_idx, (_, row) in enumerate(df_ASRSappendix.iterrows()):
 
 doc.save("C:/Users/ljkop/Laura/ASRS/ASRSappendixTable.docx")
 
-
 ######################                   Clean and condition the item tables                              ###########################
 #####################################################################################################################################
 
 def clean_table(df_temp, col_name):
+
     ## replace the column name from 'none' to 'Item Score'
     df_temp.columns = ['Item Score' if col is None else col for col in df_temp.columns]
+   
+    ## remove the first row as it is a remnant of the orig column name
+    df_temp = df_temp.iloc[1:].reset_index(drop=True)
 
+    ## remove any rows that contain raw scores as they don't contain a comment
+    df_temp = remove_raw_score_rows(df_temp)
+    
     ## remove number at beginning of sentence fragment
     df_temp[col_name] = df_temp[col_name].str.replace(r'^\d+\.\s*', '', regex=True)
 
@@ -138,19 +131,19 @@ def clean_table(df_temp, col_name):
 
     ## sort by score highest to lowest
     df_temp = df_temp.sort_values(by='Item Score', ascending=False).reset_index(drop=True)
-
+    
     ##  negate sentnece if reverse scoring
     df_temp[col_name] = df_temp[col_name].apply(negate_sentence)
 
     ##  make first verb singular tense
     df_temp[col_name] = df_temp[col_name].apply(singularize_first_verb)
 
+    ##  make first verb singular tense
+    df_temp[col_name] = df_temp[col_name].apply(to_present_tense)
+    
     ##  add first name to sentence
     df_temp[col_name] = firstName + ' ' + df_temp[col_name] + '.'
-
-    ##  delete first 2 rows
-    df_temp = df_temp.iloc[2:].reset_index(drop=True)
-
+        
     return df_temp
 
 def singularize_first_verb(text):
@@ -162,32 +155,69 @@ def singularize_first_verb(text):
             words[0] = inflected
     return ' '.join(words)
 
+def to_present_tense(text):
+    doc = nlp(text)
+    result = []
+    for token in doc:
+        if token.tag_ in ('VBD', 'VBP', 'VBG', 'VBN'):  # past, non-3rd singular, gerund, past participle
+            inflected = token._.inflect('VBZ')  # convert to third person singular present
+            result.append(inflected if inflected else token.text)
+        else:
+            result.append(token.text)
+    return ' '.join(result)
+
 def negate_sentence(text):
     if '(R)' not in text:
         return text
     clean = text.split('?')[0].strip()
     return 'does not ' + clean
 
+## remove any row with text = "Raw Score =" as this row does not contain a comment
+def remove_raw_score_rows(df_temp):
+    # Get the name of the first column
+    first_col = df_temp.columns[0]
+    
+    # Keep only rows where the first column does NOT contain "Raw Score ="
+    mask = ~df_temp[first_col].astype(str).str.contains('Raw Score =', na=False)
+    print(mask)
+    df_cleaned = df_temp[mask].reset_index(drop=True)
+    
+    return df_cleaned
+
+
+df_ub_cont = get_table(2)
+df_ub_cont = df_ub_cont.rename(columns={'Unusual Behaviors (continued)': 'Unusual Behaviors'})
+df_sc = get_table(3)
+df_sr = get_table(4)
+df_ub = get_table(5)
+df_ps = get_table(7)
+df_as = get_table(8)
+df_ser = get_table(9)
+df_al = get_table(10)
+df_ss = get_table(11)
+df_s = get_table(12)
+df_a = get_table(13)
+df_br = get_table(14)
+
+#print(df_sc)
+
 df_ub = clean_table(df_ub, 'Unusual Behaviors')
-
+df_ub_cont = clean_table(df_ub_cont, 'Unusual Behaviors')
 df_sc = clean_table(df_sc, 'Social/Communication')
-
+df_sr = clean_table(df_sr, 'Self-Regulation')
 df_ps = clean_table(df_ps, 'Peer Socialization')
-
 df_as = clean_table(df_as, 'Adult Socialization')
-
 df_ser = clean_table(df_ser, 'Social/Emotional Reciprocity')
-
 df_al = clean_table(df_al, 'Atypical Language')
-
 df_ss = clean_table(df_ss, 'Sensory Sensitivity')
-
 df_s = clean_table(df_s, 'Stereotypy')
-
-df_asr = clean_table(df_asr, 'Attention/Self-Regulation')
-
+df_a = clean_table(df_a, 'Attention')
 df_br = clean_table(df_br, 'Behavioral Rigidity')
 
+df_ub = pd.concat([df_ub, df_ub_cont], ignore_index=True)
+
+## sort by score highest to lowest
+df_ub = df_ub.sort_values(by='Item Score', ascending=False).reset_index(drop=True)
 
 #####################                   Finish conditioning ASRS table for body                          ###########################
 ####################################################################################################################################
@@ -206,7 +236,7 @@ df_ASRS['Scale'] = df_ASRS['Scale'].str.replace('Social/ Communication', 'Social
 ##  Add the description column to the table
 ls_ASRSdescriptions = ['Indicates the extent to which the child uses verbal and nonverbal communication appropriately to initiate, engage in, and maintain, social contact.', 
                        'Indicates the child’s level of tolerance for changes in routine, engagement in apparently purposeless and stereotypical behaviors, and overreaction, to certain sensory experiences.', 
-                       'Indicates deficits in attention and/or impulse control.'
+                       'Indicates deficits in attention and/or impulse control.',
                        'Indicates the child’s willingness and capacity to successfully engage in activities that develop and maintain relationships with other children.', 
                        'Indicates the child’s willingness and capacity to successfully engage in activities that develop and maintain relationships with adults.', 
                        'Indicates the child’s ability to provide an appropriate emotional response to another person in a social situation.', 
@@ -267,7 +297,7 @@ def format_list(lst):
     else:
         return ', '.join(lst[:-1]) + ', and ' + lst[-1]
 
-summary = f"Overall ASRS score: {firstName}'s Total Score on the ASRS fell in the {tot_class}."
+summary = f"Overall ASRS score: {firstName}'s total Score on the ASRS fell in the {tot_class} range, falling at the {tot_percent} percentile."
 
 if very_elevated:
     summary += f" ASRS reflected very elevated scores in {format_list(very_elevated)}."
